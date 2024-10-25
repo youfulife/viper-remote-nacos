@@ -42,10 +42,6 @@ func main() {
         log.Fatal(err)
     }
 
-    // 打印配置信息
-    fmt.Println("Database Host:", v.GetString("mysql.host"))
-    fmt.Println("Database Port:", v.GetInt("mysql.port"))
-
     // 监听配置变化
     err = v.WatchRemoteConfigOnChannel()
     if err != nil {
