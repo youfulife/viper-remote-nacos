@@ -14,7 +14,11 @@ func main() {
     // 设置 viper 使用 nacos 作为配置源
     v := viper.New()
 
-    err := v.AddRemoteProvider("nacos", "localhost:8848", "example-remote/example-remote")
+    group := "example-remote"
+    dataId := "example-remote"
+    path := dataId + "/" + group
+
+    err := v.AddRemoteProvider("nacos", "localhost:8848", path)
     if err != nil {
         log.Fatal(err)
     }
@@ -43,5 +47,5 @@ func main() {
         fmt.Println("Database Host:", v.GetString("mysql.host"))
         fmt.Println("Database Port:", v.GetInt("mysql.port"))
     }
-    
+
 }
