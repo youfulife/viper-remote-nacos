@@ -15,11 +15,16 @@ import (
 
 type remoteConfig struct {
     client config_client.IConfigClient
+    opts   []constant.ClientOption
 }
 
-func NewNacosClient(endpoint string, opts ...constant.ClientOption) (config_client.IConfigClient, error) {
+var defaultRemoteConfig = &remoteConfig{}
 
-    // create serverConfigs
+func SetNacosClientOption(opts ...constant.ClientOption) {
+    defaultRemoteConfig.opts = append(defaultRemoteConfig.opts, opts...)
+}
+
+func (rc *remoteConfig) initClient(endpoint string, opts ...constant.ClientOption) error {
     machines := strings.Split(endpoint, ";")
     var serverConfigs []constant.ServerConfig
     for _, machine := range machines {
@@ -29,33 +34,22 @@ func NewNacosClient(endpoint string, opts ...constant.ClientOption) (config_clie
         serverConfigs = append(serverConfigs, *constant.NewServerConfig(ipAddr, port, constant.WithContextPath("/nacos")))
     }
 
-    //create ClientConfig
     cc := *constant.NewClientConfig(opts...)
-    // create config client
-    client, err := clients.NewConfigClient(
-        vo.NacosClientParam{
-            ClientConfig:  &cc,
-            ServerConfigs: serverConfigs,
-        },
-    )
+    client, err := clients.NewConfigClient(vo.NacosClientParam{ClientConfig: &cc, ServerConfigs: serverConfigs})
     if err != nil {
-        return nil, err
+        return err
     }
 
-    return client, nil
-}
-
-func (rc *remoteConfig) initClient(endpoint string) {
-    client, err := NewNacosClient(endpoint)
-    if err != nil {
-        panic(err)
-    }
     rc.client = client
+    return nil
 }
 
 func (rc *remoteConfig) Get(rp viper.RemoteProvider) (io.Reader, error) {
     if rc.client == nil {
-        rc.initClient(rp.Endpoint())
+        err := rc.initClient(rp.Endpoint(), rc.opts...)
+        if err != nil {
+            return nil, err
+        }
     }
 
     dataId := strings.Split(rp.Path(), "/")[0]
@@ -74,12 +68,16 @@ func (rc *remoteConfig) Watch(rp viper.RemoteProvider) (io.Reader, error) {
 }
 
 func (rc *remoteConfig) WatchChannel(rp viper.RemoteProvider) (<-chan *viper.RemoteResponse, chan bool) {
-    if rc.client == nil {
-        rc.initClient(rp.Endpoint())
-    }
 
     quit := make(chan bool)
     resp := make(chan *viper.RemoteResponse)
+
+    if rc.client == nil {
+        err := rc.initClient(rp.Endpoint(), rc.opts...)
+        if err != nil {
+            return resp, quit
+        }
+    }
 
     dataId := strings.Split(rp.Path(), "/")[0]
     group := strings.Split(rp.Path(), "/")[1]
@@ -96,5 +94,5 @@ func (rc *remoteConfig) WatchChannel(rp viper.RemoteProvider) (<-chan *viper.Rem
 
 func init() {
     viper.SupportedRemoteProviders = append(viper.SupportedRemoteProviders, "nacos")
-    viper.RemoteConfig = &remoteConfig{}
+    viper.RemoteConfig = defaultRemoteConfig
 }
